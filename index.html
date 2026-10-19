@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Filament Shelf</title>
+<meta name="description" content="Track your 3D printing filament: spools, grams left, prints and cost.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Filament">
+<meta name="theme-color" content="#F1F3EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101412" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-column phone app, sticky header, scrolling shelf of spool cards, fixed bottom tab bar, bottom sheets for forms */
+:root{
+  --bg:#F1F3EF; --surface:#FFFFFF; --sunk:#E6EAE4; --ink:#17201C; --muted:#5B6760; --line:#D7DDD5;
+  --accent:#D9480F; --accent-ink:#FFFFFF; --accent-soft:#FBE3D6;
+  --ok:#2F7D4F; --warn:#9A6200; --warn-soft:#FBEFD2; --crit:#B83227; --crit-soft:#F8DEDA; --hub:#C5CCC4; --flange:#6B737C; --flange-edge:#4A5159; --flange-hi:#858E98; --hole:#23282D;
+  --f-display:"Chakra Petch","Segoe UI",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",-apple-system,"Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101412; --surface:#191F1C; --sunk:#232A26; --ink:#E7ECE8; --muted:#97A39C; --line:#2C3530;
+  --accent:#FF7A3D; --accent-ink:#1C0D05; --accent-soft:#3A2116;
+  --ok:#5DC98B; --warn:#E8B44E; --warn-soft:#3A2F17; --crit:#F2766A; --crit-soft:#3E1F1C; --hub:#3B4540; --flange:#5A626B; --flange-edge:#3A4047; --flange-hi:#747D87; --hole:#0C0F11;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#101412; --surface:#191F1C; --sunk:#232A26; --ink:#E7ECE8; --muted:#97A39C; --line:#2C3530;
+  --accent:#FF7A3D; --accent-ink:#1C0D05; --accent-soft:#3A2116;
+  --ok:#5DC98B; --warn:#E8B44E; --warn-soft:#3A2F17; --crit:#F2766A; --crit-soft:#3E1F1C; --hub:#3B4540; --flange:#5A626B; --flange-edge:#3A4047; --flange-hi:#747D87; --hole:#0C0F11;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px)}
+html{-webkit-text-size-adjust:100%;background:var(--bg)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+.statusbar{position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:8}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 calc(84px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:640px;margin:0 auto}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand .logo{width:34px;height:34px;flex:none;display:block}
+.brand h1{font-family:var(--f-display);font-size:22px;letter-spacing:.01em;margin:0;line-height:1}
+.sync{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.sync i{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.sync.cloud i{background:var(--ok)} .sync.local i{background:var(--warn)}
+
+/* summary + controls */
+.summary{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin:2px 0 12px}
+.summary b{color:var(--ink);font-family:var(--f-mono);font-weight:500}
+.search{width:100%;font-size:16px;padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:10px 0 12px;scrollbar-width:none;margin:0 -2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:500}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip.lowchip[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:var(--surface)}
+.row-between{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sortsel{font-size:13px;border:none;background:transparent;color:var(--muted);padding:4px 0}
+
+/* spool cards */
+.list{display:flex;flex-direction:column;gap:10px}
+.card{display:grid;grid-template-columns:60px 1fr auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;text-align:left;width:100%}
+.card:active{transform:scale(.99)}
+.card .info{min-width:0}
+.card .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .sub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .qty{text-align:right}
+.card .qty .g{font-family:var(--f-mono);font-size:17px;font-variant-numeric:tabular-nums}
+.card .qty .m{font-size:12px;color:var(--muted);font-family:var(--f-mono)}
+.tags{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:6px;background:var(--sunk);color:var(--muted)}
+.tag.low{background:var(--warn-soft);color:var(--warn)}
+.tag.empty{background:var(--crit-soft);color:var(--crit)}
+.tag.sample{background:transparent;border:1px dashed var(--line)}
+.ring{display:block;width:100%;height:auto}
+
+/* prints */
+.month{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 2px 8px;font-weight:600}
+.month:first-child{margin-top:4px}
+.prow{display:grid;grid-template-columns:14px 1fr auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 14px;width:100%;text-align:left}
+.dot{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 18%,transparent)}
+.prow .name{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .sub{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .amt{text-align:right;font-family:var(--f-mono);font-size:14px}
+.prow .amt small{display:block;color:var(--muted);font-size:12px}
+
+/* stats */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.tile .k{font-size:12px;color:var(--muted)}
+.tile .v{font-family:var(--f-mono);font-size:22px;margin-top:2px}
+.tile .v small{font-size:13px;color:var(--muted)}
+h2{font-family:var(--f-display);font-size:17px;margin:24px 2px 10px;text-wrap:balance}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.bar{display:grid;grid-template-columns:64px 1fr 74px;gap:10px;align-items:center;font-size:13px;padding:5px 0}
+.bar .track{height:10px;background:var(--sunk);border-radius:5px;overflow:hidden}
+.bar .fill{height:100%;background:var(--accent);border-radius:5px}
+.bar .val{text-align:right;font-family:var(--f-mono)}
+.setrow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0}
+.setrow + .setrow{border-top:1px solid var(--line)}
+.setrow input,.setrow select{width:110px;text-align:right;font-size:16px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.note{font-size:13px;color:var(--muted);margin:10px 2px 0}
+
+/* empty */
+.empty-state{text-align:center;padding:36px 12px 20px}
+.empty-state svg{width:120px;margin:0 auto 10px;display:block}
+.empty-state h3{font-family:var(--f-display);font-size:19px;margin:0 0 6px}
+.empty-state p{color:var(--muted);margin:0 auto 18px;max-width:34ch}
+.stack{display:flex;flex-direction:column;gap:8px;align-items:center}
+
+/* buttons */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:11px 16px;font-weight:600}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--crit);border-color:var(--crit-soft);background:var(--crit-soft)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn:disabled{opacity:.5}
+.fab{position:fixed;right:calc(max(16px,env(safe-area-inset-right,0px)) + 4px);bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:6;
+  height:52px;padding:0 20px 0 16px;border-radius:26px;border:none;background:var(--accent);color:var(--accent-ink);font-weight:600;display:flex;align-items:center;gap:8px;
+  box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 35%,transparent)}
+.fab svg{width:20px;height:20px}
+
+/* tab bar */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:7;background:var(--surface);border-top:1px solid var(--line);
+  padding:6px max(16px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  display:flex;justify-content:center}
+.tabs .in{display:grid;grid-template-columns:repeat(3,1fr);width:100%;max-width:640px}
+.tabs button{border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;font-size:11.5px;font-weight:500;color:var(--muted)}
+.tabs button svg{width:24px;height:24px}
+.tabs button[aria-current="page"]{color:var(--accent)}
+
+/* sheet */
+.sheet{position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center;background:color-mix(in srgb,#000 45%,transparent)}
+.sheet .pane{background:var(--surface);width:100%;max-width:640px;max-height:92%;overflow-y:auto;border-radius:20px 20px 0 0;
+  padding:8px max(18px,env(safe-area-inset-right,0px)) calc(22px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet .pane{animation:none}}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 10px}
+.sheet h3{font-family:var(--f-display);font-size:20px;margin:0 0 14px}
+.form{display:grid;gap:12px}
+.field{display:grid;gap:5px;min-width:0}
+.field>span{font-size:12.5px;font-weight:600;color:var(--muted)}
+.field input,.field select,.field textarea{width:100%;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg{display:flex;background:var(--sunk);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:none;background:transparent;border-radius:8px;padding:8px 0;font-weight:600;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 2px color-mix(in srgb,#000 15%,transparent)}
+.swatches{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sw{width:30px;height:30px;border-radius:50%;border:none;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 20%,transparent)}
+.sw[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px}
+.swatches input[type=color]{width:34px;height:34px;padding:0;border:none;background:none}
+.actions{display:flex;gap:10px;margin-top:6px}
+.actions .btn{flex:1}
+.hint{font-size:12.5px;color:var(--muted)}
+.detail-head{display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:center;margin-bottom:14px}
+.detail-head .big{font-family:var(--f-mono);font-size:28px;line-height:1.1}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.kv div{background:var(--surface);padding:9px 12px}
+.kv dt{font-size:11.5px;color:var(--muted)} .kv dd{margin:0;font-family:var(--f-mono);font-size:14px}
+.weigh{background:var(--sunk);border-radius:12px;padding:12px;display:grid;gap:8px;margin-bottom:14px}
+.weigh .r{display:flex;gap:8px} .weigh input{flex:1;min-width:0;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.mini{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.mini div{display:flex;justify-content:space-between;font-size:13.5px;gap:10px}
+.mini span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview{font-size:13px;color:var(--muted);background:var(--sunk);border-radius:10px;padding:9px 12px}
+.preview b{color:var(--ink);font-family:var(--f-mono);font-weight:500}
+
+.toast{position:fixed;left:50%;bottom:calc(140px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;max-width:calc(100% - 32px)}
+.loading{color:var(--muted);text-align:center;padding:40px 0}
+.backup{display:flex;gap:10px;flex-wrap:wrap}
+.backup .btn{flex:1;min-width:140px}
+</style>
+</head>
+<body>
+<div class="statusbar" aria-hidden="true"></div>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <img class="logo" src="icons/logo.png" width="34" height="34" alt="">
+      <h1>Filament Shelf</h1>
+    </div>
+    <div id="sync" class="sync"><i></i><span>Loading…</span></div>
+  </header>
+  <main id="app"><p class="loading">Loading your spools…</p></main>
+</div>
+
+<button id="fab" class="fab" type="button" hidden></button>
+
+<nav class="tabs" aria-label="Sections"><div class="in">
+  <button type="button" data-tab="spools" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="1.8"/></svg>Spools</button>
+  <button type="button" data-tab="prints"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16M7 20V9l5-5 5 5v11"/><path d="M10 13h4M10 16.5h4"/></svg>Prints</button>
+  <button type="button" data-tab="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>Stats</button>
+</div></nav>
+
+<div id="sheet" class="sheet" hidden><div class="pane" role="dialog" aria-modal="true"></div></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+const DENSITY={PLA:1.24,'PLA+':1.24,PETG:1.27,ABS:1.04,ASA:1.07,TPU:1.21,Nylon:1.14,PC:1.20,Other:1.24};
+const MATERIALS=Object.keys(DENSITY);
+const SWATCHES=['#1E1E1E','#F2F1EA','#8C9196','#C62828','#EF6C00','#F4C20D','#2E7D32','#1565C0','#6A1B9A','#E2558F','#6D4C41','#00897B'];
+const NET_SIZES=[250,500,750,1000,2000,3000];
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=(v,d=0)=>{const n=parseFloat(v);return Number.isFinite(n)?n:d};
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
+const daysAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
+
+const S={spools:[],prints:[],settings:{lowG:150,currency:'$'},mode:'loading',loaded:false,
+  tab:'spools',mat:'All',q:'',lowOnly:false,sort:'recent'};
+let store=null;
+
+/* ---------- formatting ---------- */
+const fmtG=g=>{g=Math.max(0,g||0);return g>=1000?(g/1000).toFixed(2)+' kg':Math.round(g)+' g'};
+const money=v=>S.settings.currency+(v||0).toFixed(2);
+const ppg=s=>s&&s.price&&s.netG?s.price/s.netG:0;
+const frac=s=>s.netG?Math.max(0,Math.min(1,s.remainingG/s.netG)):0;
+const meters=s=>{const d=s.diameter||1.75;const area=Math.PI*Math.pow(d/20,2);return (Math.max(0,s.remainingG)/(DENSITY[s.material]||1.24))/area/100};
+const status=s=>s.remainingG<=0?'empty':s.remainingG<=S.settings.lowG?'low':'ok';
+const spoolLabel=s=>s?`${s.brand||'Unbranded'} ${s.material}${s.colorName?' · '+s.colorName:''}`:'Deleted spool';
+const byId=id=>S.spools.find(s=>s.id===id);
+const fmtDate=iso=>{if(!iso)return '';const [y,m,d]=iso.split('-').map(Number);return new Date(y,m-1,d).toLocaleDateString(undefined,{month:'short',day:'numeric'})};
+
+/* Spool lying flat on a table, seen from a low angle: bottom flange, filament band, top flange with spokes.
+   The filament band's width shows what's left: core (14) when empty, nearly the flange rim when full. */
+let spoolN=0;
+function ring(hex,f){
+  f=Math.max(0,Math.min(1,f));
+  const id='sg'+(++spoolN),K=.38,F=44,T=3;     // K flattens circles into ellipses; F = flange radius; T = flange thickness
+  const X=50,top=36,bot=64;                     // flange centers: top face of the top flange, top face of the bottom flange
+  const R=14+f*(F-3-14);
+  const p=n=>n.toFixed(2);
+  const ell=(y,r,fill,extra='')=>`<ellipse cx="${X}" cy="${p(y)}" rx="${p(r)}" ry="${p(r*K)}" fill="${fill}" ${extra}/>`;
+  const cyl=(y1,y2,r,fill)=>`<path d="M${p(X-r)} ${p(y1)} L${p(X-r)} ${p(y2)} A${p(r)} ${p(r*K)} 0 0 0 ${p(X+r)} ${p(y2)} L${p(X+r)} ${p(y1)}Z" fill="${fill}"/>`;
+  const winds=[.25,.5,.75].map(t=>{const y=top+T+(bot-top-T)*t;
+    return `<path d="M${p(X-R)} ${p(y)} A${p(R)} ${p(R*K)} 0 0 0 ${p(X+R)} ${p(y)}" fill="none" stroke="#000" stroke-opacity=".2" stroke-width=".9"/>`}).join('');
+  const spokes=Array.from({length:12},(_,i)=>{const a=i*Math.PI/6,c=Math.cos(a),s=Math.sin(a);
+    return `<line x1="${p(X+17*c)}" y1="${p(top+17*K*s)}" x2="${p(X+(F-3)*c)}" y2="${p(top+(F-3)*K*s)}" stroke="var(--flange-hi)" stroke-width="1.3" stroke-linecap="round"/>`}).join('');
+  return `<svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity=".35"/><stop offset=".35" stop-color="#fff" stop-opacity=".22"/>
+      <stop offset=".6" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".4"/></linearGradient>
+      <clipPath id="${id}h">${ell(top,9,'#000')}</clipPath></defs>
+    ${cyl(bot,bot+T,F,'var(--flange-edge)')}${ell(bot,F,'var(--flange)')}
+    ${cyl(top,bot,14,'var(--flange-edge)')}
+    ${f>0.005?`${cyl(top,bot,R,esc(hex))}${cyl(top,bot,R,`url(#${id})`)}${winds}`:''}
+    ${cyl(top,top+T,F,'var(--flange-edge)')}
+    ${ell(top,F,'var(--flange)')}
+    ${ell(top,F-2.5,'none','stroke="var(--flange-hi)" stroke-width="1"')}
+    ${spokes}
+    ${ell(top,17,'var(--flange)','stroke="var(--flange-hi)" stroke-width="1.5"')}
+    ${ell(top,9,'var(--flange-edge)')}
+    <g clip-path="url(#${id}h)">${ell(top+3.5,9,'var(--hole)')}</g>
+  </svg>`;
+}
+
+/* ---------- storage ---------- */
+function localStore(){
+  const KEY='filament-shelf-v1';
+  try{const raw=localStorage.getItem(KEY);if(raw){const d=JSON.parse(raw);S.spools=d.spools||[];S.prints=d.prints||[];Object.assign(S.settings,d.settings||{})}}catch(e){}
+  const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify({spools:S.spools,prints:S.prints,settings:S.settings}))}catch(e){}};
+  const up=(arr,item)=>{const i=arr.findIndex(x=>x.id===item.id);if(i>=0)arr[i]=item;else arr.push(item)};
+  const done=()=>{persist();render()};
+  return{
+    async saveSpool(s){up(S.spools,s);done()},
+    async deleteSpool(id){S.spools=S.spools.filter(x=>x.id!==id);done()},
+    async savePrint(p){up(S.prints,p);done()},
+    async deletePrint(id){S.prints=S.prints.filter(x=>x.id!==id);done()},
+    async saveSettings(st){Object.assign(S.settings,st);done()},
+    async replaceAll(d){S.spools=d.spools;S.prints=d.prints;Object.assign(S.settings,d.settings||{});done()},
+  };
+}
+
+/* ---------- backup ---------- */
+async function exportBackup(){
+  const data={app:'filament-shelf',version:1,exportedAt:new Date().toISOString(),spools:S.spools,prints:S.prints,settings:S.settings};
+  const name=`filament-shelf-backup-${today()}.json`;
+  const file=new File([JSON.stringify(data,null,2)],name,{type:'application/json'});
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Filament Shelf backup'});return}
+  }catch(e){if(e&&e.name==='AbortError')return}
+  const url=URL.createObjectURL(file),a=document.createElement('a');
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+let pendingImport=null;
+async function readBackup(fileInput){
+  const f=fileInput.files&&fileInput.files[0];fileInput.value='';
+  if(!f)return;
+  try{
+    const d=JSON.parse(await f.text());
+    if(!d||!Array.isArray(d.spools)||!Array.isArray(d.prints))throw new Error('shape');
+    pendingImport=d;
+    openSheet(`<h3>Restore this backup?</h3>
+      <p class="hint">The backup has ${d.spools.length} spools and ${d.prints.length} prints${d.exportedAt?`, saved ${esc(fmtDate(d.exportedAt.slice(0,10)))}`:''}. Restoring replaces the ${S.spools.length} spools and ${S.prints.length} prints on this phone.</p>
+      <div class="actions"><button class="btn" data-action="close">Cancel</button><button class="btn primary" data-action="confirm-import">Replace my data</button></div>`,{kind:'import'});
+  }catch(e){toast('That file is not a Filament Shelf backup. Choose a .json file exported from this app.')}
+}
+
+/* ---------- render ---------- */
+function render(){
+  const ae=document.activeElement,focusId=ae&&ae.id&&$('#app').contains(ae)?ae.id:null,sel=focusId&&ae.selectionStart;
+  const sync=$('#sync');
+  sync.className='sync '+(S.mode==='loading'?'':'cloud');
+  sync.querySelector('span').textContent=S.mode==='loading'?'Loading…':'On this device';
+  document.querySelectorAll('.tabs button').forEach(b=>{if(b.dataset.tab===S.tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+  const fab=$('#fab');
+  if(!S.loaded){$('#app').innerHTML='<p class="loading">Loading your spools…</p>';fab.hidden=true;return}
+  if(S.tab==='spools'){$('#app').innerHTML=viewSpools();fab.hidden=!S.spools.length;fab.innerHTML=plus()+'Add spool';fab.dataset.action='add-spool'}
+  else if(S.tab==='prints'){$('#app').innerHTML=viewPrints();fab.hidden=!S.spools.length;fab.innerHTML=plus()+'Log print';fab.dataset.action='add-print'}
+  else{$('#app').innerHTML=viewStats();fab.hidden=true}
+  if(focusId){const el=document.getElementById(focusId);if(el){el.focus();try{el.setSelectionRange(sel,sel)}catch(e){}}}
+}
+const plus=()=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+
+function emptyShelf(){
+  return `<div class="empty-state">
+    <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="54" fill="none" stroke="var(--line)" stroke-width="4"/><circle cx="60" cy="60" r="38" fill="none" stroke="var(--line)" stroke-width="2" stroke-dasharray="4 5"/><circle cx="60" cy="60" r="20" fill="var(--hub)"/><circle cx="60" cy="60" r="7" fill="var(--bg)"/></svg>
+    <h3>Your shelf is empty</h3>
+    <p>Add each spool you own. Log prints with the grams your slicer reports, and the spool counts down on its own.</p>
+    <div class="stack"><button class="btn primary" data-action="add-spool">Add your first spool</button>
+    <button class="btn ghost" data-action="load-sample">Try it with sample spools</button></div></div>`;
+}
+
+function viewSpools(){
+  if(!S.spools.length)return emptyShelf();
+  const total=S.spools.reduce((a,s)=>a+Math.max(0,s.remainingG),0);
+  const low=S.spools.filter(s=>status(s)!=='ok').length;
+  const mats=['All',...MATERIALS.filter(m=>S.spools.some(s=>s.material===m))];
+  const q=S.q.trim().toLowerCase();
+  let list=S.spools.filter(s=>(S.mat==='All'||s.material===S.mat)&&(!S.lowOnly||status(s)!=='ok')
+    &&(!q||[s.brand,s.material,s.colorName,s.notes].join(' ').toLowerCase().includes(q)));
+  const sorts={recent:(a,b)=>(b.lastUsed||b.createdAt||0)-(a.lastUsed||a.createdAt||0),least:(a,b)=>a.remainingG-b.remainingG,most:(a,b)=>b.remainingG-a.remainingG,
+    brand:(a,b)=>(a.brand||'').localeCompare(b.brand||'')||a.material.localeCompare(b.material)};
+  list.sort(sorts[S.sort]||sorts.recent);
+  return `<div class="summary"><span><b>${S.spools.length}</b> spools</span><span><b>${fmtG(total)}</b> on hand</span>${low?`<span><b>${low}</b> low or empty</span>`:''}</div>
+  <input id="q" class="search" type="search" placeholder="Search brand, color, notes" value="${esc(S.q)}" autocomplete="off" aria-label="Search spools">
+  <div class="chips">${mats.map(m=>`<button class="chip" data-action="mat" data-v="${esc(m)}" aria-pressed="${S.mat===m}">${esc(m)}</button>`).join('')}
+    <button class="chip lowchip" data-action="low" aria-pressed="${S.lowOnly}">Low stock</button></div>
+  <div class="row-between" style="margin-bottom:8px"><span class="hint">${list.length} shown</span>
+    <select id="sort" class="sortsel" aria-label="Sort spools">
+      ${[['recent','Recently used'],['least','Least left'],['most','Most left'],['brand','Brand']].map(([v,l])=>`<option value="${v}" ${S.sort===v?'selected':''}>${l}</option>`).join('')}
+    </select></div>
+  <div class="list">${list.map(card).join('')||'<p class="hint" style="text-align:center;padding:20px">No spools match.</p>'}</div>`;
+}
+function card(s){
+  const st=status(s);
+  return `<button class="card" data-action="open-spool" data-id="${esc(s.id)}">
+    ${ring(s.hex,frac(s))}
+    <div class="info"><div class="name">${esc(s.brand||'Unbranded')} ${esc(s.material)}</div>
+      <div class="sub">${esc(s.colorName||s.hex)} · ${s.diameter} mm</div>
+      <div class="tags">${st==='low'?'<span class="tag low">Low</span>':''}${st==='empty'?'<span class="tag empty">Empty</span>':''}${s.sample?'<span class="tag sample">Sample</span>':''}</div></div>
+    <div class="qty"><div class="g">${Math.round(Math.max(0,s.remainingG))} g</div><div class="m">${Math.round(frac(s)*100)}% · ${Math.round(meters(s))} m</div></div>
+  </button>`;
+}
+
+function viewPrints(){
+  if(!S.spools.length)return emptyShelf();
+  if(!S.prints.length)return `<div class="empty-state"><h3>No prints logged yet</h3><p>After a print finishes, log the filament it used. Your slicer shows this as grams in the print estimate.</p>
+    <div class="stack"><button class="btn primary" data-action="add-print">Log a print</button></div></div>`;
+  const sorted=[...S.prints].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));
+  const groups={};
+  sorted.forEach(p=>{const k=(p.date||'').slice(0,7);(groups[k]=groups[k]||[]).push(p)});
+  return Object.entries(groups).map(([k,ps])=>{
+    const [y,m]=k.split('-').map(Number);
+    const label=new Date(y,m-1,1).toLocaleDateString(undefined,{month:'long',year:'numeric'});
+    const g=ps.reduce((a,p)=>a+p.grams,0),c=ps.reduce((a,p)=>a+(p.cost||0),0);
+    return `<div class="month"><span>${esc(label)}</span><span class="mono">${fmtG(g)} · ${money(c)}</span></div>
+      <div class="list">${ps.map(p=>{const s=byId(p.spoolId);return `<button class="prow" data-action="open-print" data-id="${esc(p.id)}">
+        <span class="dot" style="background:${esc(s?s.hex:'transparent')}"></span>
+        <div style="min-width:0"><div class="name">${esc(p.name||'Untitled print')}</div><div class="sub">${esc(fmtDate(p.date))} · ${esc(spoolLabel(s))}</div></div>
+        <div class="amt">${Math.round(p.grams)} g<small>${money(p.cost)}</small></div></button>`}).join('')}</div>`;
+  }).join('');
+}
+
+function viewStats(){
+  const onHand=S.spools.reduce((a,s)=>a+Math.max(0,s.remainingG),0);
+  const value=S.spools.reduce((a,s)=>a+Math.max(0,s.remainingG)*ppg(s),0);
+  const since=daysAgo(30);
+  const recent=S.prints.filter(p=>(p.date||'')>=since);
+  const used30=recent.reduce((a,p)=>a+p.grams,0),cost30=recent.reduce((a,p)=>a+(p.cost||0),0);
+  const byMat={};S.spools.forEach(s=>byMat[s.material]=(byMat[s.material]||0)+Math.max(0,s.remainingG));
+  const mats=Object.entries(byMat).sort((a,b)=>b[1]-a[1]);const max=Math.max(1,...mats.map(m=>m[1]));
+  const low=S.spools.filter(s=>status(s)!=='ok').sort((a,b)=>a.remainingG-b.remainingG);
+  const hasSample=S.spools.some(s=>s.sample)||S.prints.some(p=>p.sample);
+  return `<div class="tiles">
+    <div class="tile"><div class="k">On hand</div><div class="v">${fmtG(onHand)}</div></div>
+    <div class="tile"><div class="k">Value on shelf</div><div class="v">${money(value)}</div></div>
+    <div class="tile"><div class="k">Used, last 30 days</div><div class="v">${fmtG(used30)}</div></div>
+    <div class="tile"><div class="k">Print cost, last 30 days</div><div class="v">${money(cost30)}</div></div></div>
+  <h2>On hand by material</h2>
+  <div class="panel">${mats.length?mats.map(([m,g])=>`<div class="bar"><span>${esc(m)}</span><div class="track"><div class="fill" style="width:${(g/max*100).toFixed(1)}%"></div></div><span class="val">${fmtG(g)}</span></div>`).join(''):'<span class="hint">Add spools to see this.</span>'}</div>
+  <h2>Running low</h2>
+  <div class="panel">${low.length?`<div class="mini" style="margin:0">${low.map(s=>`<div><span>${esc(spoolLabel(s))}</span><span class="mono" style="color:var(--${status(s)==='empty'?'crit':'warn'})">${Math.round(Math.max(0,s.remainingG))} g</span></div>`).join('')}</div>`:`<span class="hint">Nothing is under ${S.settings.lowG} g.</span>`}</div>
+  <h2>Settings</h2>
+  <div class="panel">
+    <label class="setrow"><span>Low-stock warning below (g)</span><input id="set-low" type="number" inputmode="numeric" min="0" step="10" value="${S.settings.lowG}"></label>
+    <label class="setrow"><span>Currency symbol</span><input id="set-cur" type="text" maxlength="3" value="${esc(S.settings.currency)}"></label>
+  </div>
+  <h2>Backup</h2>
+  <div class="panel">
+    <div class="backup"><button class="btn" data-action="export">Export backup</button><button class="btn" data-action="import">Restore from backup</button></div>
+    <input id="import-file" type="file" accept="application/json,.json" hidden>
+    <p class="note" style="margin:10px 0 0">Your spools and prints are saved only on this device. Export a backup now and then (save it to Files or iCloud Drive) so you can restore it on a new phone or another browser.</p>
+  </div>
+  ${hasSample?`<div style="margin-top:16px"><button class="btn danger" data-action="clear-sample" style="width:100%">Remove sample spools and prints</button></div>`:''}`;
+}
+
+/* ---------- sheets ---------- */
+let sheetCtx={};
+function openSheet(html,ctx={}){sheetCtx=ctx;const sh=$('#sheet');sh.querySelector('.pane').innerHTML='<div class="grab"></div>'+html;sh.hidden=false;document.body.style.overflow='hidden'}
+function closeSheet(){$('#sheet').hidden=true;document.body.style.overflow='';sheetCtx={}}
+
+function spoolForm(s){
+  const isNew=!s;
+  s=s||{brand:'',material:'PLA',colorName:'',hex:'#1E1E1E',diameter:1.75,netG:1000,remainingG:'',price:'',emptyG:200,notes:''};
+  sheetCtx={kind:'spool',id:s.id,hex:s.hex,diameter:s.diameter,orig:s};
+  const netOpts=NET_SIZES.includes(s.netG)?NET_SIZES:[...NET_SIZES,s.netG].sort((a,b)=>a-b);
+  openSheet(`<h3>${isNew?'Add spool':'Edit spool'}</h3>
+  <form class="form" id="spool-form">
+    <div class="two"><label class="field"><span>Brand</span><input id="f-brand" value="${esc(s.brand)}" placeholder="Polymaker" autocomplete="off"></label>
+    <label class="field"><span>Material</span><select id="f-mat">${MATERIALS.map(m=>`<option ${m===s.material?'selected':''}>${m}</option>`).join('')}</select></label></div>
+    <label class="field"><span>Color name</span><input id="f-cname" value="${esc(s.colorName)}" placeholder="Galaxy Black" autocomplete="off"></label>
+    <div class="field"><span>Color</span><div class="swatches" id="swatches">${SWATCHES.map(h=>`<button type="button" class="sw" data-action="pick-hex" data-v="${h}" style="background:${h}" aria-label="Color ${h}" aria-pressed="${h.toLowerCase()===String(s.hex).toLowerCase()}"></button>`).join('')}
+      <input type="color" id="f-hex" value="${esc(s.hex)}" aria-label="Custom color"></div></div>
+    <div class="field"><span>Diameter</span><div class="seg" id="dia">${[1.75,2.85].map(d=>`<button type="button" data-action="pick-dia" data-v="${d}" aria-pressed="${s.diameter===d}">${d} mm</button>`).join('')}</div></div>
+    <div class="two"><label class="field"><span>Spool size (net g)</span><select id="f-net">${netOpts.map(n=>`<option value="${n}" ${n===s.netG?'selected':''}>${n>=1000?n/1000+' kg':n+' g'}</option>`).join('')}</select></label>
+    <label class="field"><span>Grams left</span><input id="f-rem" type="number" inputmode="decimal" min="0" value="${s.remainingG===''?'':Math.round(s.remainingG)}" placeholder="Full"></label></div>
+    <div class="two"><label class="field"><span>Price paid</span><input id="f-price" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(s.price)}" placeholder="21.99"></label>
+    <label class="field"><span>Empty spool weight (g)</span><input id="f-tare" type="number" inputmode="decimal" min="0" value="${esc(s.emptyG)}"></label></div>
+    <span class="hint">Empty spool weight lets you weigh a spool on a kitchen scale to update what's left. Most cardboard spools weigh 130–180 g and plastic ones 200–250 g.</span>
+    <label class="field"><span>Notes</span><input id="f-notes" value="${esc(s.notes)}" placeholder="Dry box 2, prints best at 215 °C" autocomplete="off"></label>
+    <div class="actions"><button type="button" class="btn" data-action="close">Cancel</button><button type="submit" class="btn primary">${isNew?'Add to shelf':'Save changes'}</button></div>
+  </form>`,sheetCtx);
+}
+
+function spoolDetail(s){
+  const prints=S.prints.filter(p=>p.spoolId===s.id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const used=prints.reduce((a,p)=>a+p.grams,0);
+  openSheet(`<div class="detail-head">${ring(s.hex,frac(s))}<div style="min-width:0">
+    <div class="hint">${esc(s.brand||'Unbranded')} · ${s.diameter} mm</div>
+    <h3 style="margin:2px 0 6px">${esc(s.material)} ${esc(s.colorName)}</h3>
+    <div class="big">${Math.round(Math.max(0,s.remainingG))} g</div><div class="hint">${Math.round(frac(s)*100)}% of ${fmtG(s.netG)} · about ${Math.round(meters(s))} m</div></div></div>
+  <dl class="kv">
+    <div><dt>Price per kg</dt><dd>${ppg(s)?money(ppg(s)*1000):'—'}</dd></div>
+    <div><dt>Value left</dt><dd>${ppg(s)?money(Math.max(0,s.remainingG)*ppg(s)):'—'}</dd></div>
+    <div><dt>Prints logged</dt><dd>${prints.length}</dd></div>
+    <div><dt>Used in logged prints</dt><dd>${fmtG(used)}</dd></div>
+  </dl>
+  ${s.notes?`<p class="hint" style="margin:-4px 0 14px">${esc(s.notes)}</p>`:''}
+  <div class="weigh"><span class="hint">Put the spool on a scale and enter the reading. ${esc(s.emptyG||0)} g of empty spool is subtracted.</span>
+    <div class="r"><input id="w-read" type="number" inputmode="decimal" min="0" placeholder="Scale reading (g)" aria-label="Scale reading in grams"><button class="btn" data-action="weigh">Update</button></div></div>
+  ${prints.length?`<div class="mini">${prints.slice(0,6).map(p=>`<div><span>${esc(fmtDate(p.date))} · ${esc(p.name||'Untitled print')}</span><span class="mono">${Math.round(p.grams)} g</span></div>`).join('')}</div>`:''}
+  <div class="actions"><button class="btn primary" data-action="add-print" data-id="${esc(s.id)}">Log print</button><button class="btn" data-action="edit-spool">Edit</button></div>
+  <div class="actions"><button class="btn danger" data-action="del-spool">Delete spool</button></div>`,{kind:'spool-detail',id:s.id});
+}
+
+function printForm(spoolId){
+  const spools=[...S.spools].sort((a,b)=>(b.lastUsed||b.createdAt||0)-(a.lastUsed||a.createdAt||0));
+  const sel=spoolId||(spools[0]&&spools[0].id);
+  openSheet(`<h3>Log a print</h3>
+  <form class="form" id="print-form">
+    <label class="field"><span>What did you print?</span><input id="p-name" placeholder="Headphone hook" autocomplete="off"></label>
+    <label class="field"><span>Spool</span><select id="p-spool">${spools.map(s=>`<option value="${esc(s.id)}" ${s.id===sel?'selected':''}>${esc(spoolLabel(s))} (${Math.round(Math.max(0,s.remainingG))} g)</option>`).join('')}</select></label>
+    <div class="two"><label class="field"><span>Filament used (g)</span><input id="p-grams" type="number" inputmode="decimal" min="0" step="0.1" required placeholder="From your slicer"></label>
+    <label class="field"><span>Date</span><input id="p-date" type="date" value="${today()}"></label></div>
+    <div class="preview" id="p-preview">Enter the grams to see the cost.</div>
+    <div class="actions"><button type="button" class="btn" data-action="close">Cancel</button><button type="submit" class="btn primary">Log print</button></div>
+  </form>`,{kind:'print'});
+}
+function updatePreview(){
+  const el=$('#p-preview');if(!el)return;
+  const s=byId($('#p-spool').value),g=num($('#p-grams').value);
+  if(!s||!g){el.textContent='Enter the grams to see the cost.';return}
+  const left=s.remainingG-g;
+  el.innerHTML=`Costs <b>${money(g*ppg(s))}</b>. Leaves <b>${Math.round(Math.max(0,left))} g</b> on this spool.${left<0?' <span style="color:var(--crit)">That is more than the spool has left.</span>':''}`;
+}
+
+function printDetail(p){
+  const s=byId(p.spoolId);
+  openSheet(`<h3>${esc(p.name||'Untitled print')}</h3>
+  <dl class="kv">
+    <div><dt>Date</dt><dd>${esc(fmtDate(p.date))}</dd></div>
+    <div><dt>Filament</dt><dd>${Math.round(p.grams)} g</dd></div>
+    <div><dt>Cost</dt><dd>${money(p.cost)}</dd></div>
+    <div><dt>Spool</dt><dd style="font-family:var(--f-body);font-size:13px">${esc(spoolLabel(s))}</dd></div>
+  </dl>
+  <p class="hint">Deleting this print puts ${Math.round(p.grams)} g back on ${s?'its spool':'the spool, if it still exists'}.</p>
+  <div class="actions"><button class="btn" data-action="close">Close</button><button class="btn danger" data-action="del-print">Delete print</button></div>`,{kind:'print-detail',id:p.id});
+}
+
+/* ---------- actions ---------- */
+let armed=null;
+function arm(btn,label,fn){
+  if(armed===btn){armed=null;fn();return}
+  armed=btn;const old=btn.textContent;btn.textContent=label;
+  setTimeout(()=>{if(armed===btn){armed=null;btn.textContent=old}},3500);
+}
+let toastT;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2600)}
+
+async function loadSample(){
+  const now=Date.now();
+  const sp=[
+    ['Bambu Lab','PLA','Jade White','#F2F1EA',1000,640,19.99,250],
+    ['Polymaker','PLA','Charcoal Black','#262626',1000,110,22.99,140],
+    ['Prusament','PETG','Prusa Orange','#F06A25',1000,860,29.99,190],
+    ['Overture','TPU','Ocean Blue','#1E5AA8',1000,420,25.99,170],
+    ['Hatchbox','ABS','True Red','#C62828',1000,35,21.99,230],
+    ['eSun','PLA+','Olive Green','#6B7A3A',1000,1000,21.99,220],
+  ].map((r,i)=>({id:'sample-'+i,brand:r[0],material:r[1],colorName:r[2],hex:r[3],diameter:1.75,netG:r[4],remainingG:r[5],price:r[6],emptyG:r[7],notes:'',sample:true,createdAt:now-i*1000}));
+  const pr=[['Benchy calibration',0,12.4,2],['Cable clips ×20',1,38,5],['Planter pot',2,146,9],['Phone stand',0,64.2,14],['Watch band',3,9.1,21]]
+    .map((r,i)=>({id:'sample-p'+i,name:r[0],spoolId:'sample-'+r[1],grams:r[2],date:daysAgo(r[3]),cost:+(r[2]*sp[r[1]].price/sp[r[1]].netG).toFixed(2),sample:true,createdAt:now-i*1000}));
+  for(const s of sp)await store.saveSpool(s);
+  for(const p of pr)await store.savePrint(p);
+  toast('Sample spools added. Remove them anytime from Stats.');
+}
+async function clearSample(){
+  for(const p of S.prints.filter(p=>p.sample))await store.deletePrint(p.id);
+  for(const s of S.spools.filter(s=>s.sample))await store.deleteSpool(s.id);
+  toast('Sample data removed');
+}
+
+document.addEventListener('click',async e=>{
+  const tab=e.target.closest('[data-tab]');
+  if(tab){S.tab=tab.dataset.tab;window.scrollTo(0,0);render();return}
+  if(e.target.id==='sheet'){closeSheet();return}
+  const b=e.target.closest('[data-action]');if(!b)return;
+  const a=b.dataset.action;
+  if(a==='close')closeSheet();
+  else if(a==='add-spool'){spoolForm()}
+  else if(a==='add-print'){printForm(b.dataset.id)}
+  else if(a==='load-sample'){b.disabled=true;await loadSample()}
+  else if(a==='clear-sample'){arm(b,'Tap again to remove',clearSample)}
+  else if(a==='export'){await exportBackup()}
+  else if(a==='import'){$('#import-file').click()}
+  else if(a==='confirm-import'){if(pendingImport){const d=pendingImport;pendingImport=null;await store.replaceAll(d);closeSheet();toast(`Restored ${d.spools.length} spools and ${d.prints.length} prints`)}}
+  else if(a==='mat'){S.mat=b.dataset.v;render()}
+  else if(a==='low'){S.lowOnly=!S.lowOnly;render()}
+  else if(a==='open-spool'){const s=byId(b.dataset.id);if(s)spoolDetail(s)}
+  else if(a==='open-print'){const p=S.prints.find(x=>x.id===b.dataset.id);if(p)printDetail(p)}
+  else if(a==='edit-spool'){const s=byId(sheetCtx.id);if(s)spoolForm(s)}
+  else if(a==='pick-hex'){sheetCtx.hex=b.dataset.v;$('#f-hex').value=b.dataset.v;document.querySelectorAll('#swatches .sw').forEach(x=>x.setAttribute('aria-pressed',x===b))}
+  else if(a==='pick-dia'){sheetCtx.diameter=num(b.dataset.v,1.75);document.querySelectorAll('#dia button').forEach(x=>x.setAttribute('aria-pressed',x===b))}
+  else if(a==='weigh'){
+    const s=byId(sheetCtx.id),r=num($('#w-read').value,NaN);
+    if(!s||!Number.isFinite(r)){toast('Enter the scale reading in grams');return}
+    const rem=Math.max(0,Math.round(r-(s.emptyG||0)));
+    await store.saveSpool({...s,remainingG:rem,updatedAt:Date.now()});
+    toast(`Updated to ${rem} g`);const ns=byId(s.id);if(ns)spoolDetail(ns);
+  }
+  else if(a==='del-spool'){arm(b,'Tap again to delete',async()=>{await store.deleteSpool(sheetCtx.id);closeSheet();toast('Spool deleted')})}
+  else if(a==='del-print'){arm(b,'Tap again to delete',async()=>{
+    const p=S.prints.find(x=>x.id===sheetCtx.id);if(!p)return closeSheet();
+    const s=byId(p.spoolId);
+    await store.deletePrint(p.id);
+    if(s)await store.saveSpool({...s,remainingG:Math.min(s.netG*1.5,s.remainingG+p.grams)});
+    closeSheet();toast('Print deleted, filament returned to spool');
+  })}
+});
+
+document.addEventListener('input',e=>{
+  if(e.target.id==='q'){S.q=e.target.value;render()}
+  else if(e.target.id==='f-hex'){sheetCtx.hex=e.target.value;document.querySelectorAll('#swatches .sw').forEach(x=>x.setAttribute('aria-pressed','false'))}
+  else if(e.target.id==='p-grams'||e.target.id==='p-spool')updatePreview();
+});
+document.addEventListener('change',e=>{
+  if(e.target.id==='sort'){S.sort=e.target.value;render()}
+  else if(e.target.id==='p-spool')updatePreview();
+  else if(e.target.id==='set-low'){const v=Math.max(0,Math.round(num(e.target.value,150)));store.saveSettings({lowG:v});toast('Low-stock warning set to '+v+' g')}
+  else if(e.target.id==='set-cur'){const v=e.target.value.trim()||'$';store.saveSettings({currency:v})}
+  else if(e.target.id==='import-file'){readBackup(e.target)}
+});
+document.addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(e.target.id==='spool-form'){
+    const o=sheetCtx.orig||{};
+    const netG=num($('#f-net').value,1000);
+    const remRaw=$('#f-rem').value;
+    const s={...o,id:o.id||newId(),brand:$('#f-brand').value.trim(),material:$('#f-mat').value,colorName:$('#f-cname').value.trim(),
+      hex:sheetCtx.hex||$('#f-hex').value,diameter:sheetCtx.diameter||1.75,netG,remainingG:remRaw===''?netG:Math.max(0,num(remRaw)),
+      price:num($('#f-price').value,0),emptyG:num($('#f-tare').value,0),notes:$('#f-notes').value.trim(),createdAt:o.createdAt||Date.now(),updatedAt:Date.now()};
+    const isNew=!o.id;
+    await store.saveSpool(s);closeSheet();toast(isNew?'Spool added':'Spool saved');
+  }else if(e.target.id==='print-form'){
+    const s=byId($('#p-spool').value),g=num($('#p-grams').value);
+    if(!s||g<=0){toast('Enter the grams this print used');return}
+    const p={id:newId(),name:$('#p-name').value.trim(),spoolId:s.id,grams:g,date:$('#p-date').value||today(),cost:+(g*ppg(s)).toFixed(2),createdAt:Date.now()};
+    await store.savePrint(p);
+    await store.saveSpool({...s,remainingG:Math.max(0,s.remainingG-g),lastUsed:Date.now()});
+    closeSheet();toast(`Logged ${Math.round(g)} g from ${s.brand||s.material}`);
+  }
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#sheet').hidden)closeSheet()});
+$('#fab').addEventListener('click',e=>{e.stopPropagation();if($('#fab').dataset.action==='add-print')printForm();else spoolForm()});
+
+/* ---------- boot ---------- */
+S.mode='local';store=localStore();S.loaded=true;
+render();
+// Ask the browser not to clear this app's data when storage runs low
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+// Offline support
+if('serviceWorker' in navigator&&location.protocol!=='file:'){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
